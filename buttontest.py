@@ -1,9 +1,11 @@
 from gpiozero import Button
 from time import sleep
 
-PIN = "GPIO4"
+import config
 
-switch = Button(PIN, pull_up=True, bounce_time=0.05)
+PIN = config.STOP_PIN
+
+switch = Button(PIN, pull_up=True, bounce_time=config.DEBOUNCE)
 
 print(f"watching {PIN}, press or flip the switch, ctrl c to quit")
 

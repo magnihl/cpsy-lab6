@@ -1,57 +1,27 @@
 #!/usr/bin/env python3
-"""Keyboard remote control. w a s d to drive, e stop, r re-arm, q quit."""
+"""Keyboard remote control. w a s d to drive, e stop, r re-arm, q quit.
+
+Run on the Pi:  python3 rc.py
+System python3, not the venv. gpiozero is installed system wide.
+"""
 
 import curses
 import time
 
-from gpiozero import Button, DigitalOutputDevice, Motor, Robot
-
 import config
+from estop import EStop
+from rover import Rover
 
-SPEED = 0.5
-STOP_PIN = "GPIO4"
 
-# the terminal waits before it starts repeating a held key, so the first
-# press gets a long grace period and the rest get a short one
-STOP_AFTER = 0.1
-FIRST_HOLD = 0.7
-REPEAT_GAP = 0.25
-
-stdscr = None
-slp = None
-
-try:
-    stdscr = curses.initscr()
-    curses.cbreak()
-    stdscr.keypad(1)
-    stdscr.nodelay(1)
+def run(stdscr, rover, estop):
     stdscr.addstr(0, 2, "w a s d drive, e stop, r re-arm, q quit")
 
-    slp = DigitalOutputDevice(config.SLEEP_PIN)
-    slp.on()
-
-    robot = Robot(
-        left=Motor(**config.MOTOR_A),
-        right=Motor(**config.MOTOR_B),
-    )
-
-    estop = Button(STOP_PIN, pull_up=True, bounce_time=0.05)
-    latched = False
-
-    def trip():
-        global latched
-        latched = True
-        robot.stop()
-        slp.off()
-
-    estop.when_pressed = trip
-
     actions = {
-        ord("w"): ("forward ", lambda: robot.forward(SPEED)),
-        ord("s"): ("backward", lambda: robot.backward(SPEED)),
-        ord("a"): ("left    ", lambda: robot.left(SPEED)),
-        ord("d"): ("right   ", lambda: robot.right(SPEED)),
-        ord("e"): ("stop    ", robot.stop),
+        ord("w"): ("forward ", rover.forward),
+        ord("s"): ("backward", rover.backward),
+        ord("a"): ("left    ", rover.left),
+        ord("d"): ("right   ", rover.right),
+        ord("e"): ("stop    ", rover.stop),
     }
 
     last_press = 0.0
@@ -65,17 +35,19 @@ try:
         now = time.monotonic()
 
         if key == ord("q"):
-            break
+            return
 
-        state = "E-STOP TRIPPED, press r" if latched else "armed            "
+        state = "armed            " if estop.armed else "E-STOP TRIPPED, press r"
         if state != shown:
             stdscr.addstr(2, 2, state)
             shown = state
 
-        if latched:
+        if not estop.armed:
             if key == ord("r"):
-                latched = False
-                slp.on()
+                # zero the motor pins before SLP goes high again, or a
+                # drive command left set when the stop hit resumes
+                rover.stop()
+                estop.rearm()
                 moving = False
             time.sleep(0.02)
             continue
@@ -88,19 +60,25 @@ try:
             last_press = now
             moving = True
         elif moving:
-            repeating = (last_press - prev_press) < REPEAT_GAP
-            timeout = STOP_AFTER if repeating else FIRST_HOLD
+            repeating = (last_press - prev_press) < config.REPEAT_GAP
+            timeout = config.STOP_AFTER if repeating else config.FIRST_HOLD
             if now - last_press > timeout:
-                robot.stop()
+                rover.stop()
                 stdscr.addstr(1, 2, "idle    ")
                 moving = False
 
         time.sleep(0.02)
 
-finally:
-    if slp is not None:
-        slp.off()
-    if stdscr is not None:
-        curses.nocbreak()
-        stdscr.keypad(0)
-        curses.endwin()
+
+def main():
+    estop = EStop()
+    rover = Rover(estop)
+    estop.arm()
+    try:
+        curses.wrapper(run, rover, estop)
+    finally:
+        estop.close()
+
+
+if __name__ == "__main__":
+    main()
