@@ -1,54 +1,8 @@
-"""The rover's drive and its wheel encoders."""
+"""The rover's drive. Every move is gated on the e-stop being armed."""
 
-import time
-
-from gpiozero import Motor, Robot, RotaryEncoder
+from gpiozero import Motor, Robot
 
 import config
-
-
-class Wheel:
-    """Odometer and speedometer for one wheel.
-
-    Counts encoder pulses and reports distance in rotations and speed
-    in rotations per minute.
-    """
-
-    def __init__(self, pins, pulses_per_rev=config.PULSES_PER_REV):
-        self._encoder = RotaryEncoder(*pins, max_steps=0)
-        self._ppr = pulses_per_rev
-        self._last_steps = 0
-        self._last_time = time.monotonic()
-
-    @property
-    def rotations(self):
-        """Total rotations since start. Negative means backwards."""
-        return self._encoder.steps / self._ppr
-
-    def speed(self):
-        """Rotations per minute since the last call to speed().
-
-        Measured by sampling the count, so call it on a steady interval.
-        A longer interval is less noisy but slower to react, which
-        matters once a PID is reading this.
-        """
-        now = time.monotonic()
-        steps = self._encoder.steps
-
-        elapsed = now - self._last_time
-        moved = steps - self._last_steps
-
-        self._last_time = now
-        self._last_steps = steps
-
-        if elapsed <= 0:
-            return 0.0
-        return (moved / self._ppr) / elapsed * 60
-
-    def reset(self):
-        self._encoder.steps = 0
-        self._last_steps = 0
-        self._last_time = time.monotonic()
 
 
 class Rover:
