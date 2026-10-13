@@ -14,6 +14,9 @@ from rover import Rover
 
 
 def run(stdscr, rover, estop):
+    # curses.wrapper does initscr, cbreak, noecho and keypad, but not
+    # this. Without it getch blocks and the idle timeout never runs.
+    stdscr.nodelay(1)
     stdscr.addstr(0, 2, "w a s d drive, e stop, r re-arm, q quit")
 
     actions = {
