@@ -6,6 +6,9 @@ SLEEP_PIN = "GPIO25"
 STOP_PIN = "GPIO4"
 IR_CHANNEL = 0
 
+# one full rotation is about 700 encoder pulses, per the Lab 6 page
+PULSES_PER_REV = 700
+
 SPEED = 0.5
 
 # the terminal waits before it starts repeating a held key, so the first
